@@ -364,6 +364,41 @@ def parse_arguments() -> argparse.Namespace:
         help='强制回测（即使已有回测结果也重新计算）'
     )
 
+    # === RAG Strategy ===
+    parser.add_argument(
+        '--upload-strategy',
+        type=str,
+        default=None,
+        help='上传策略文件路径（支持 PDF、DOC、DOCX、TXT、图片）'
+    )
+
+    parser.add_argument(
+        '--strategy-name',
+        type=str,
+        default=None,
+        help='策略名称（可选，默认使用文件名）'
+    )
+
+    parser.add_argument(
+        '--analyze-with-strategy',
+        type=str,
+        default=None,
+        help='分析时使用的策略ID'
+    )
+
+    parser.add_argument(
+        '--list-strategies',
+        action='store_true',
+        help='列出所有已上传的策略'
+    )
+
+    parser.add_argument(
+        '--retrieve-strategy',
+        type=str,
+        default=None,
+        help='根据 query 检索策略内容'
+    )
+
     return parser.parse_args()
 
 
@@ -474,7 +509,8 @@ def run_full_analysis(
             stock_codes=stock_codes,
             dry_run=args.dry_run,
             send_notification=not args.no_notify,
-            merge_notification=merge_notification
+            merge_notification=merge_notification,
+            strategy_id=getattr(args, 'analyze_with_strategy', None),
         )
 
         # Issue #128: 分析间隔 - 在个股分析和大盘分析之间添加延迟
@@ -819,6 +855,49 @@ def main() -> int:
         return 0
 
     try:
+        # === RAG Strategy 模式 ===
+        from src.rag.retriever import get_retriever
+
+        if getattr(args, 'upload_strategy', None):
+            logger.info("模式: 上传策略")
+            retriever = get_retriever()
+            try:
+                strategy_id = retriever.add_strategy(
+                    file_path=args.upload_strategy,
+                    strategy_name=getattr(args, 'strategy_name', None),
+                )
+                logger.info(f"策略上传成功: {strategy_id}")
+                return 0
+            except Exception as e:
+                logger.error(f"策略上传失败: {e}")
+                return 1
+
+        if getattr(args, 'list_strategies', False):
+            logger.info("模式: 列出策略")
+            retriever = get_retriever()
+            strategies = retriever.list_strategies()
+            if not strategies:
+                logger.info("暂无已上传的策略")
+            else:
+                logger.info(f"共 {len(strategies)} 个策略:")
+                for s in strategies:
+                    logger.info(f"  - [{s.id}] {s.name} ({s.file_type}, {s.chunk_count} chunks)")
+            return 0
+
+        if getattr(args, 'retrieve_strategy', None):
+            logger.info("模式: 检索策略")
+            retriever = get_retriever()
+            results = retriever.retrieve(args.retrieve_strategy, top_k=5)
+            if not results:
+                logger.info("未找到相关结果")
+            else:
+                logger.info(f"找到 {len(results)} 条相关结果:")
+                for r in results:
+                    logger.info(f"  [Score: {r.score:.4f}] {r.content[:100]}...")
+            return 0
+
+        # === 标准模式 ===
+
         # 模式0: 回测
         if getattr(args, 'backtest', False):
             logger.info("模式: 回测")

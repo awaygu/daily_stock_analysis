@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { BarChart3, BriefcaseBusiness, Home, LogOut, MessageSquareQuote, Settings2 } from 'lucide-react';
+import { BarChart3, BriefcaseBusiness, Home, LogOut, MessageSquareQuote, Settings2, FileText } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAgentChatStore } from '../../stores/agentChatStore';
@@ -27,13 +27,14 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'home', label: '首页', to: '/', icon: Home, exact: true },
   { key: 'chat', label: '问股', to: '/chat', icon: MessageSquareQuote, badge: 'completion' },
   { key: 'portfolio', label: '持仓', to: '/portfolio', icon: BriefcaseBusiness },
+  { key: 'strategy', label: '策略', to: '/strategy', icon: FileText },
   { key: 'backtest', label: '回测', to: '/backtest', icon: BarChart3 },
   { key: 'settings', label: '设置', to: '/settings', icon: Settings2 },
 ];
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNavigate }) => {
   const { authEnabled, logout } = useAuth();
-  const completionBadge = useAgentChatStore((state) => state.completionBadge);
+  const completionBadge = useAgentChatStore((state: { completionBadge: boolean }) => state.completionBadge);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   return (

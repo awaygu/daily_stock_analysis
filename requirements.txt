@@ -65,3 +65,10 @@ jinja2>=3.1.0               # Jinja2 template engine for report rendering
 fastapi>=0.109.0            # 现代 Python Web 框架
 uvicorn[standard]>=0.27.0   # ASGI 服务器
 python-multipart>=0.0.6     # FastAPI File/Form upload support
+
+# RAG 向量检索
+faiss-cpu>=1.7.0            # FAISS 向量索引（本地向量数据库）
+pypdf>=3.0.0                # PDF 文档解析
+python-docx>=0.8.0          # DOCX 文档解析
+Pillow>=9.0.0               # 图片处理（OCR 前置依赖）
+pytesseract>=0.3.10         # OCR 文字识别（可选，需安装 Tesseract OCR）

@@ -1636,11 +1636,12 @@ class GeminiAnalyzer:
             return None
 
     def analyze(
-        self, 
+        self,
         context: Dict[str, Any],
         news_context: Optional[str] = None,
         progress_callback: Optional[Callable[[int, str], None]] = None,
         stream_progress_callback: Optional[Callable[[int], None]] = None,
+        strategy_id: Optional[str] = None,
     ) -> AnalysisResult:
         """
         分析单只股票
@@ -1670,6 +1671,10 @@ class GeminiAnalyzer:
         config = self._get_runtime_config()
         report_language = normalize_report_language(getattr(config, "report_language", "zh"))
         system_prompt = self._get_analysis_system_prompt(report_language, stock_code=code)
+
+        strategy_context = ""
+        if strategy_id:
+            strategy_context = self._get_strategy_context(strategy_id, code, report_language)
         
         # 请求前增加延时（防止连续请求触发限流）
         request_delay = config.gemini_request_delay
@@ -1706,8 +1711,8 @@ class GeminiAnalyzer:
             )
         
         try:
-            # 格式化输入（包含技术面数据和新闻）
-            prompt = self._format_prompt(context, name, news_context, report_language=report_language)
+            # 格式化输入（包含技术面数据、新闻和策略）
+            prompt = self._format_prompt(context, name, news_context, report_language=report_language, strategy_context=strategy_context)
             
             config = self._get_runtime_config()
             model_name = config.litellm_model or "unknown"
@@ -1837,11 +1842,12 @@ class GeminiAnalyzer:
             )
     
     def _format_prompt(
-        self, 
-        context: Dict[str, Any], 
+        self,
+        context: Dict[str, Any],
         name: str,
         news_context: Optional[str] = None,
         report_language: str = "zh",
+        strategy_context: str = "",
     ) -> str:
         """
         格式化分析提示词（决策仪表盘 v2.0）
@@ -2164,7 +2170,17 @@ class GeminiAnalyzer:
 - **技术面一致性**：严禁把“空头排列”和“多头排列”等互斥结论同时当作有效依据；若基本面/事件面与技术面冲突，必须明确写“事件先行、技术待确认”或“基本面偏多，但技术面尚未确认”
  
 请输出完整的 JSON 格式决策仪表盘。"""
+        
+        if strategy_context:
+            prompt += f"""
 
+---
+
+## 📚 交易策略参考
+
+{strategy_context}
+"""
+        
         if report_language == "en":
             prompt += """
 
@@ -2187,7 +2203,36 @@ class GeminiAnalyzer:
 """
         
         return prompt
-    
+
+    def _get_strategy_context(self, strategy_id: str, stock_code: str, report_language: str = "zh") -> str:
+        try:
+            from src.rag.retriever import get_retriever
+            retriever = get_retriever()
+            strategy = retriever.get_strategy(strategy_id)
+            if not strategy:
+                logger.warning(f"策略 {strategy_id} 不存在，跳过策略检索")
+                return ""
+
+            stock_name = STOCK_NAME_MAP.get(stock_code, stock_code)
+            query = f"{stock_name} {stock_code} 交易策略 买卖信号 风险控制"
+            results = retriever.retrieve(query=query, top_k=5, strategy_id=strategy_id)
+            if not results:
+                logger.info(f"策略 {strategy.name} 中未检索到与 {stock_name}({stock_code}) 相关的内容")
+                return ""
+
+            strategy_header = f"策略: {strategy.name}" if report_language == "zh" else f"Strategy: {strategy.name}"
+            context_parts = [f"### {strategy_header}\n"]
+            for i, r in enumerate(results, 1):
+                source_info = f" (来源: {r.source}" + (f", 第{r.page}页" if r.page else "") + ")" if report_language == "zh" else f" (Source: {r.source}" + (f", Page {r.page}" if r.page else "") + ")"
+                context_parts.append(f"**片段 {i}**{source_info}:\n{r.content}\n")
+
+            context_text = "\n".join(context_parts)
+            logger.info(f"策略 {strategy.name} 检索到 {len(results)} 条相关内容")
+            return context_text
+        except Exception as e:
+            logger.warning(f"策略检索失败 (strategy_id={strategy_id}): {e}")
+            return ""
+
     def _format_volume(self, volume: Optional[float]) -> str:
         """格式化成交量显示"""
         if volume is None:

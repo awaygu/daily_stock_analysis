@@ -235,7 +235,7 @@ class StockAnalysisPipeline:
             logger.error(f"{stock_name}({code}) {error_msg}")
             return False, error_msg
     
-    def analyze_stock(self, code: str, report_type: ReportType, query_id: str) -> Optional[AnalysisResult]:
+    def analyze_stock(self, code: str, report_type: ReportType, query_id: str, strategy_id: Optional[str] = None) -> Optional[AnalysisResult]:
         """
         分析单只股票（增强版：含量比、换手率、筹码分析、多维度情报）
         
@@ -478,6 +478,7 @@ class StockAnalysisPipeline:
                 news_context=news_context,
                 progress_callback=self._emit_progress,
                 stream_progress_callback=_on_llm_stream,
+                strategy_id=strategy_id,
             )
 
             # Step 7.5: 填充分析时的价格信息到 result
@@ -1593,6 +1594,7 @@ class StockAnalysisPipeline:
         report_type: ReportType = ReportType.SIMPLE,
         analysis_query_id: Optional[str] = None,
         current_time: Optional[datetime] = None,
+        strategy_id: Optional[str] = None,
     ) -> Optional[AnalysisResult]:
         """
         处理单只股票的完整流程
@@ -1640,7 +1642,7 @@ class StockAnalysisPipeline:
                 return None
             
             effective_query_id = analysis_query_id or self.query_id or uuid.uuid4().hex
-            result = self.analyze_stock(code, report_type, query_id=effective_query_id)
+            result = self.analyze_stock(code, report_type, query_id=effective_query_id, strategy_id=strategy_id)
             
             if result and result.success:
                 logger.info(
@@ -1674,7 +1676,8 @@ class StockAnalysisPipeline:
         stock_codes: Optional[List[str]] = None,
         dry_run: bool = False,
         send_notification: bool = True,
-        merge_notification: bool = False
+        merge_notification: bool = False,
+        strategy_id: Optional[str] = None
     ) -> List[AnalysisResult]:
         """
         运行完整的分析流程
@@ -1755,9 +1758,10 @@ class StockAnalysisPipeline:
                     code,
                     skip_analysis=dry_run,
                     single_stock_notify=False,
-                    report_type=report_type,  # Issue #119: 传递报告类型
+                    report_type=report_type,
                     analysis_query_id=uuid.uuid4().hex,
                     current_time=resume_reference_time,
+                    strategy_id=strategy_id,
                 ): code
                 for code in stock_codes
             }

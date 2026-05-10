@@ -69,7 +69,11 @@ class AnalyzeRequest(BaseModel):
     )
     notify: bool = Field(
         True,
-        description="是否发送推送通知（Telegram/企业微信等）"
+        description="发送推送通知（Telegram/企业微信等）"
+    )
+    strategy_id: Optional[str] = Field(
+        None,
+        description="分析时使用的策略ID（从已上传的策略库中选择）"
     )
 
     class Config:
